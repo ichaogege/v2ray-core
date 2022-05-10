@@ -204,6 +204,7 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 	}
 	sniffingRequest := content.SniffingRequest
 	if destination.Network != net.Network_TCP || !sniffingRequest.Enabled {
+		// 不是 tcp，或者不嗅探 TLS SNI extension
 		go d.routedDispatch(ctx, outbound, destination)
 	} else {
 		go func() {
@@ -211,6 +212,7 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 				reader: outbound.Reader.(*pipe.Reader),
 			}
 			outbound.Reader = cReader
+			// 从 SNI 找到 TLS domain 进行路由匹配
 			result, err := sniffer(ctx, cReader)
 			if err == nil {
 				content.Protocol = result.Protocol()
@@ -221,6 +223,7 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 				destination.Address = net.ParseAddress(domain)
 				ob.Target = destination
 			}
+			// 开始走v2ray 内置路由规则
 			d.routedDispatch(ctx, outbound, destination)
 		}()
 	}
