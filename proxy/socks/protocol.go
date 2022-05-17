@@ -319,6 +319,11 @@ func writeSocks4Response(writer io.Writer, errCode byte, address net.Address, po
 }
 
 func DecodeUDPPacket(packet *buf.Buffer) (*protocol.RequestHeader, error) {
+	//	 +----+------+------+----------+----------+----------+
+    //   |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+    //   +----+------+------+----------+----------+----------+
+    //   | 2  |  1   |  1   | Variable |    2     | Variable |
+    //   +----+------+------+----------+----------+----------+
 	if packet.Len() < 5 {
 		return nil, newError("insufficient length of packet.")
 	}
@@ -328,6 +333,19 @@ func DecodeUDPPacket(packet *buf.Buffer) (*protocol.RequestHeader, error) {
 	}
 
 	// packet[0] and packet[1] are reserved
+	// https://datatracker.ietf.org/doc/html/rfc1928#section-7
+	
+	// The FRAG field indicates whether or not this datagram is one of a
+	// number of fragments.  If implemented, the high-order bit indicates
+	// end-of-fragment sequence, while a value of X'00' indicates that this
+	// datagram is standalone.  Values between 1 and 127 indicate the
+	// fragment position within a fragment sequence.  Each receiver will
+	// have a REASSEMBLY QUEUE and a REASSEMBLY TIMER associated with these
+	// fragments.
+
+	// 由于 UDP 并不保证顺序，受限于 MTU，udp socket读出来的包可能是乱序的
+	// FRAG 会标记client发出包的顺序，udp proxy server需维护重组队列，根据 FRAG 数字重排数据
+	// v2ray 这直接就不支持 fragment 功能
 	if packet.Byte(2) != 0 /* fragments */ {
 		return nil, newError("discarding fragmented payload.")
 	}
